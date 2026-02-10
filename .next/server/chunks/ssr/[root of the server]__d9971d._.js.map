@@ -1,0 +1,7 @@
+{
+  "version": 3,
+  "sources": [],
+  "sections": [
+    {"offset": {"line": 15, "column": 0}, "map": {"version":3,"sources":["file:///home/orcl/Desktop/pll/components/providers.tsx"],"sourcesContent":["'use client';\n\nimport { QueryClient, QueryClientProvider } from '@tanstack/react-query';\nimport { useState } from 'react';\n\nexport function Providers({ children }: { children: React.ReactNode }) {\n  const [queryClient] = useState(\n    () =>\n      new QueryClient({\n        defaultOptions: {\n          queries: {\n            staleTime: 60 * 1000, // 1 minute\n            refetchInterval: 30 * 1000, // Refetch every 30 seconds\n          },\n        },\n      })\n  );\n\n  return (\n    <QueryClientProvider client={queryClient}>{children}</QueryClientProvider>\n  );\n}\n"],"names":[],"mappings":";;;;AAGA;AADA;AAAA;AAFA;;;;AAKO,SAAS,UAAU,EAAE,QAAQ,EAAiC;IACnE,MAAM,CAAC,YAAY,GAAG,CAAA,GAAA,qMAAA,CAAA,WAAQ,AAAD,EAC3B,IACE,IAAI,6KAAA,CAAA,cAAW,CAAC;YACd,gBAAgB;gBACd,SAAS;oBACP,WAAW,KAAK;oBAChB,iBAAiB,KAAK;gBACxB;YACF;QACF;IAGJ,qBACE,8OAAC,sLAAA,CAAA,sBAAmB;QAAC,QAAQ;kBAAc;;;;;;AAE/C"}},
+    {"offset": {"line": 44, "column": 0}, "map": {"version":3,"sources":[],"names":[],"mappings":"A"}}]
+}
