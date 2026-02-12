@@ -18,15 +18,17 @@ export function AddTrader() {
     setError('');
 
     try {
-      // Try to fetch user (username or address)
-      const isAddress = input.startsWith('0x') && input.length === 42;
+      // Validate address format
+      const address = input.trim().toLowerCase();
       
-      const response = await fetch(
-        `/api/user?${isAddress ? `address=${input}` : `username=${input}`}`
-      );
+      if (!address.startsWith('0x') || address.length !== 42) {
+        throw new Error('Please enter a valid Ethereum wallet address (0x...)');
+      }
+      
+      const response = await fetch(`/api/user?address=${address}`);
       
       if (!response.ok) {
-        throw new Error('User not found');
+        throw new Error('Could not find user with this address. Make sure the address has Polymarket activity.');
       }
 
       const user = await response.json();
@@ -38,8 +40,8 @@ export function AddTrader() {
       });
 
       setInput('');
-    } catch (err) {
-      setError('Could not find user. Please check username or address.');
+    } catch (err: any) {
+      setError(err.message || 'Could not add trader. Please check the address.');
     } finally {
       setLoading(false);
     }
@@ -60,7 +62,7 @@ export function AddTrader() {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
-            placeholder="Enter username or wallet address..."
+            placeholder="Enter wallet address (0x...)"
             className="w-full bg-zinc-800 border border-zinc-700 rounded-lg pl-10 pr-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             disabled={loading}
           />

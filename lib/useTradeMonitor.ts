@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useRef } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
 import { useTrackerStore } from '@/lib/store';
 import type { Trade } from '@/types';
 
@@ -10,23 +10,34 @@ export function useTradeMonitor() {
   const notificationSettings = useTrackerStore((state) => state.notificationSettings);
   const lastTradesRef = useRef<Map<string, string>>(new Map());
 
-  // Monitor each trader's latest trade
-  trackedTraders.forEach((trader) => {
-    const { data: trades } = useQuery({
-      queryKey: ['trades', trader.address],
-      queryFn: async () => {
-        const res = await fetch(`/api/trades?address=${trader.address}&limit=1`);
-        if (!res.ok) return [];
-        return res.json() as Promise<Trade[]>;
-      },
-      enabled: trader.notificationsEnabled,
-      refetchInterval: 30 * 1000, // Check every 30 seconds
-    });
+  // Use useQueries to fetch trades for all traders at once
+  const tradesQueries = useQueries({
+    queries: trackedTraders
+      .filter((trader) => trader.notificationsEnabled)
+      .map((trader) => ({
+        queryKey: ['trades-monitor', trader.address],
+        queryFn: async () => {
+          const res = await fetch(`/api/trades?address=${trader.address}&limit=1`);
+          if (!res.ok) return [];
+          return res.json() as Promise<Trade[]>;
+        },
+        refetchInterval: 30 * 1000, // Check every 30 seconds
+        enabled: trader.notificationsEnabled,
+      })),
+  });
 
-    useEffect(() => {
-      if (!trades || trades.length === 0) return;
+  useEffect(() => {
+    if (!notificationSettings.discordWebhookUrl) return;
+
+    // Process each trader's trades
+    trackedTraders.forEach((trader, index) => {
       if (!trader.notificationsEnabled) return;
-      if (!notificationSettings.discordWebhookUrl) return;
+
+      const queryResult = tradesQueries[trackedTraders.filter(t => t.notificationsEnabled).indexOf(trader)];
+      if (!queryResult?.data) return;
+
+      const trades = queryResult.data;
+      if (trades.length === 0) return;
 
       const latestTrade = trades[0];
       const lastTradeId = lastTradesRef.current.get(trader.address);
@@ -34,7 +45,7 @@ export function useTradeMonitor() {
       // New trade detected
       if (lastTradeId && lastTradeId !== latestTrade.id) {
         const isEntry = latestTrade.type === 'BUY';
-        
+
         // Check if this notification type is enabled
         const shouldNotify =
           (isEntry && notificationSettings.enableEntryNotifications) ||
@@ -57,6 +68,6 @@ export function useTradeMonitor() {
 
       // Update last trade ID
       lastTradesRef.current.set(trader.address, latestTrade.id);
-    }, [trades, trader, notificationSettings]);
-  });
+    });
+  }, [tradesQueries, trackedTraders, notificationSettings]);
 }

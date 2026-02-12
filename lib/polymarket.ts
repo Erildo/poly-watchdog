@@ -1,31 +1,40 @@
 import type { PolymarketUser, Position, Trade } from '@/types';
 
-const POLYMARKET_API = 'https://clob.polymarket.com';
+// Polymarket Data API - official endpoints
+const DATA_API = 'https://data-api.polymarket.com';
 const GAMMA_API = 'https://gamma-api.polymarket.com';
 
 export class PolymarketAPI {
-  // Get user by username
+  // Get user by username - try to search via activity first
   static async getUserByUsername(username: string): Promise<PolymarketUser | null> {
     try {
-      const response = await fetch(`${GAMMA_API}/users?username=${username}`);
-      if (!response.ok) return null;
-      
-      const data = await response.json();
-      return data;
+      // For now, we'll just return a basic user object since username search isn't directly supported
+      // User should use wallet address instead
+      return null;
     } catch (error) {
       console.error('Error fetching user:', error);
       return null;
     }
   }
 
-  // Get user by address
+  // Get user by address - this is the primary method
   static async getUserByAddress(address: string): Promise<PolymarketUser | null> {
     try {
-      const response = await fetch(`${GAMMA_API}/users/${address}`);
-      if (!response.ok) return null;
+      // First, check if we can get positions to verify the address exists
+      const response = await fetch(`${DATA_API}/positions?user=${address.toLowerCase()}`);
       
-      const data = await response.json();
-      return data;
+      if (!response.ok) {
+        return null;
+      }
+      
+      const positions = await response.json();
+      
+      // Return a basic user object with the address
+      return {
+        id: address.toLowerCase(),
+        username: `${address.slice(0, 6)}...${address.slice(-4)}`,
+        address: address.toLowerCase(),
+      };
     } catch (error) {
       console.error('Error fetching user:', error);
       return null;
@@ -35,32 +44,32 @@ export class PolymarketAPI {
   // Get user positions
   static async getPositions(address: string): Promise<Position[]> {
     try {
-      const response = await fetch(`${GAMMA_API}/positions?user=${address}`);
+      const response = await fetch(`${DATA_API}/positions?user=${address.toLowerCase()}`);
       if (!response.ok) return [];
       
       const data = await response.json();
       
       // Transform API response to our Position type
       return data.map((position: any) => ({
-        id: position.id,
-        marketId: position.market_id,
+        id: position.conditionId || position.asset,
+        marketId: position.conditionId,
         market: {
-          id: position.market_id,
-          question: position.market?.question || 'Unknown Market',
-          slug: position.market?.slug || '',
-          endDate: position.market?.end_date || '',
-          volume: position.market?.volume || 0,
-          liquidity: position.market?.liquidity || 0,
+          id: position.conditionId,
+          question: position.title || 'Unknown Market',
+          slug: position.slug || '',
+          endDate: position.end || '',
+          volume: 0,
+          liquidity: 0,
         },
-        outcome: position.outcome,
-        size: parseFloat(position.size),
-        averagePrice: parseFloat(position.avg_price),
-        currentPrice: parseFloat(position.current_price || position.avg_price),
-        pnl: parseFloat(position.pnl || '0'),
-        pnlPercentage: parseFloat(position.pnl_percentage || '0'),
-        isOpen: position.is_open,
-        createdAt: position.created_at,
-        closedAt: position.closed_at,
+        outcome: position.outcome || 'Yes',
+        size: parseFloat(position.size || '0'),
+        averagePrice: parseFloat(position.avgPrice || '0'),
+        currentPrice: parseFloat(position.curPrice || position.avgPrice || '0'),
+        pnl: parseFloat(position.cashPnl || '0'),
+        pnlPercentage: parseFloat(position.percentPnl || '0'),
+        isOpen: parseFloat(position.size || '0') > 0 && !position.redeemable,
+        createdAt: new Date().toISOString(),
+        closedAt: position.redeemable ? new Date().toISOString() : undefined,
       }));
     } catch (error) {
       console.error('Error fetching positions:', error);
@@ -68,34 +77,34 @@ export class PolymarketAPI {
     }
   }
 
-  // Get user trade history
+  // Get user trade history (activity)
   static async getTrades(address: string, limit = 50): Promise<Trade[]> {
     try {
       const response = await fetch(
-        `${GAMMA_API}/trades?user=${address}&limit=${limit}`
+        `${DATA_API}/activity?user=${address.toLowerCase()}&type=TRADE&limit=${limit}`
       );
       if (!response.ok) return [];
       
       const data = await response.json();
       
       // Transform API response to our Trade type
-      return data.map((trade: any) => ({
-        id: trade.id,
-        marketId: trade.market_id,
+      return data.map((activity: any) => ({
+        id: activity.transactionHash || activity.timestamp,
+        marketId: activity.conditionId,
         market: {
-          id: trade.market_id,
-          question: trade.market?.question || 'Unknown Market',
-          slug: trade.market?.slug || '',
-          endDate: trade.market?.end_date || '',
-          volume: trade.market?.volume || 0,
-          liquidity: trade.market?.liquidity || 0,
+          id: activity.conditionId,
+          question: activity.title || 'Unknown Market',
+          slug: activity.slug || '',
+          endDate: activity.end || '',
+          volume: 0,
+          liquidity: 0,
         },
-        outcome: trade.outcome,
-        type: trade.side === 'BUY' ? 'BUY' : 'SELL',
-        size: parseFloat(trade.size),
-        price: parseFloat(trade.price),
-        timestamp: trade.timestamp,
-        txHash: trade.tx_hash,
+        outcome: activity.outcome || 'Yes',
+        type: activity.side === 'BUY' ? 'BUY' : 'SELL',
+        size: parseFloat(activity.size || '0'),
+        price: parseFloat(activity.price || '0'),
+        timestamp: new Date(activity.timestamp * 1000).toISOString(),
+        txHash: activity.transactionHash,
       }));
     } catch (error) {
       console.error('Error fetching trades:', error);
