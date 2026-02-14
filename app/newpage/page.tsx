@@ -1,18 +1,16 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { Navigation } from '../../components/Navigation';
-import { TradingChart } from './TradingChart';
-import { SignalPanel } from './SignalPanel';
-import { AlertFeed } from './AlertFeed';
-import { SettingsPanel } from './SettingsPanel';
-import { PerformanceMetrics } from './PerformanceMetrics';
-import { useBTCStore } from './store';
-import { useBTCPriceStream, fetchHistoricalCandles } from './useBTCPrice';
-import { UCSIndicator } from './ucs-indicator';
-import { calculateCamarillaPivots, getDailyCandle } from './camarilla';
-import { sendDiscordAlert } from './discord';
-import { Alert } from '@/types';
+import { TradingChart } from './components/TradingChart';
+import { CombinedSignalAlerts } from './components/CombinedSignalAlerts';
+import { SettingsPanel } from './components/SettingsPanel';
+import { PerformanceMetrics } from './components/PerformanceMetrics';
+import { useBTCStore } from './lib/store';
+import { useBTCPriceStream, fetchHistoricalCandles } from './hooks/useBTCPrice';
+import { UCSIndicator } from './lib/ucs-indicator';
+import { calculateCamarillaPivots, getDailyCandle, getWeeklyCandle, getMonthlyCandle } from './lib/camarilla';
+import { sendDiscordAlert } from './lib/discord';
+import { Alert } from './types';
 
 export default function BTCDashboard() {
   const [isLoading, setIsLoading] = useState(true);
@@ -38,14 +36,21 @@ export default function BTCDashboard() {
   useEffect(() => {
     const loadHistoricalData = async () => {
       try {
-        const historical = await fetchHistoricalCandles(500);
+        const historical = await fetchHistoricalCandles(1000); // Will fetch 48 hours
         if (historical.length > 0) {
           setCandles(historical);
           
-          // Calculate initial pivots
+          // Calculate initial pivots (daily, weekly, monthly)
           const dailyCandle = getDailyCandle(historical);
+          const weeklyCandle = getWeeklyCandle(historical);
+          const monthlyCandle = getMonthlyCandle(historical);
+          
           if (dailyCandle) {
-            const initialPivots = calculateCamarillaPivots(dailyCandle);
+            const initialPivots = calculateCamarillaPivots(
+              dailyCandle,
+              weeklyCandle || undefined,
+              monthlyCandle || undefined
+            );
             setPivots(initialPivots);
           }
         }
@@ -59,19 +64,24 @@ export default function BTCDashboard() {
     loadHistoricalData();
   }, [setCandles, setPivots]);
 
-  // Run indicator on new candles
-  useEffect(() => {
-    if (candles.length < 32) return; // Need minimum candles for indicator
+  // Run indicator ONCE on initial load only
+  const [signalsCalculated, setSignalsCalculated] = useState(false);
 
-    const { signals, indicators } = indicatorEngine.calculate(candles, {
+  useEffect(() => {
+    if (candles.length < 32 || signalsCalculated) return; // Skip if already calculated
+
+    console.log('Calculating UCS signals for', candles.length, 'candles...');
+    
+    const { signals } = indicatorEngine.calculate(candles, {
       highProb: config.enableHighProb,
       midProb: config.enableMidProb,
       lowProb: config.enableLowProb,
     });
 
-    // Process new signals
+    console.log('Found', signals.length, 'signals');
+
+    // Add all signals at once
     signals.forEach(signal => {
-      // Check if signal already exists
       const isDuplicate = activeSignals.some(
         s => s.time === signal.time && s.type === signal.type
       );
@@ -79,7 +89,6 @@ export default function BTCDashboard() {
       if (!isDuplicate && signal.confidence >= config.alertThreshold) {
         addSignal(signal);
 
-        // Create alert
         const alert: Alert = {
           id: `${signal.time}-${signal.type}`,
           timestamp: signal.time,
@@ -92,22 +101,42 @@ export default function BTCDashboard() {
 
         addAlert(alert);
 
-        // Send Discord notification
-        if (config.discordWebhook) {
+        // Send Discord notification only for new real-time signals
+        if (signal.time > Date.now() - 60000 && config.discordWebhook) {
           sendDiscordAlert(config.discordWebhook, alert);
         }
       }
     });
 
-    // Update pivots daily
-    const dailyCandle = getDailyCandle(candles);
-    if (dailyCandle) {
-      const newPivots = calculateCamarillaPivots(dailyCandle);
-      if (JSON.stringify(newPivots) !== JSON.stringify(pivots)) {
-        setPivots(newPivots);
+    setSignalsCalculated(true);
+  }, [candles.length >= 32]); // Only run when we have enough candles
+
+  // Recalculate pivots only once per day (check every minute, but only update if day changed)
+  useEffect(() => {
+    if (candles.length === 0) return;
+
+    const checkAndUpdatePivots = () => {
+      const dailyCandle = getDailyCandle(candles);
+      const weeklyCandle = getWeeklyCandle(candles);
+      const monthlyCandle = getMonthlyCandle(candles);
+      
+      if (dailyCandle) {
+        const newPivots = calculateCamarillaPivots(
+          dailyCandle,
+          weeklyCandle || undefined,
+          monthlyCandle || undefined
+        );
+        
+        // Only update if pivots actually changed (different day)
+        if (JSON.stringify(newPivots) !== JSON.stringify(pivots)) {
+          console.log('Pivots updated for new day/week/month');
+          setPivots(newPivots);
+        }
       }
-    }
-  }, [candles, config, activeSignals, pivots, addSignal, addAlert, setPivots, indicatorEngine]);
+    };
+
+    checkAndUpdatePivots();
+  }, [candles, pivots, setPivots]);
 
   const latestSignal = activeSignals.length > 0 
     ? activeSignals[activeSignals.length - 1] 
@@ -125,18 +154,16 @@ export default function BTCDashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-black text-white">
-      <Navigation />
-      <div className="p-6">
-        <div className="max-w-[1800px] mx-auto space-y-6">
-          {/* Header */}
+    <div className="min-h-screen bg-black text-white p-6">
+      <div className="max-w-[1920px] mx-auto space-y-6">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-orange-500 to-yellow-500 bg-clip-text text-transparent">
               BTC Reversal Dashboard
             </h1>
             <p className="text-gray-400 mt-2">
-              Turtle SnapBack
+              UCS Extreme Snap Back • Real-time 1-min candles • Camarilla Pivots
             </p>
           </div>
           
@@ -147,30 +174,34 @@ export default function BTCDashboard() {
           </div>
         </div>
 
-        {/* Main Chart */}
-        <div className="bg-gray-900 rounded-xl p-6 border border-gray-700">
-          <TradingChart
-            candles={candles}
-            signals={activeSignals}
-            pivots={pivots}
-            currentPrice={currentPrice}
-          />
-        </div>
+        {/* Main Layout: Chart (Left) | Panels (Right) */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Left Side: Trading Chart */}
+          <div className="bg-gray-900 rounded-xl p-6 border border-gray-700">
+            <TradingChart
+              candles={candles}
+              signals={activeSignals}
+              pivots={pivots}
+              currentPrice={currentPrice}
+            />
+          </div>
 
-        {/* Dashboard Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Signal Panel */}
-          <SignalPanel latestSignal={latestSignal} currentPrice={currentPrice} />
-          
-          {/* Alert Feed */}
-          <AlertFeed alerts={alerts} />
-          
-          {/* Settings */}
-          <SettingsPanel />
-        </div>
+          {/* Right Side: Panels */}
+          <div className="space-y-6">
+            {/* Combined Signal + Alerts */}
+            <CombinedSignalAlerts
+              latestSignal={latestSignal}
+              currentPrice={currentPrice}
+              alerts={alerts}
+            />
 
-        {/* Performance Metrics */}
-        <PerformanceMetrics alerts={alerts} />
+            {/* Performance Metrics */}
+            <PerformanceMetrics alerts={alerts} />
+
+            {/* Settings */}
+            <SettingsPanel />
+          </div>
+        </div>
 
         {/* Footer */}
         <div className="text-center text-gray-500 text-sm py-4 border-t border-gray-800">
@@ -180,7 +211,6 @@ export default function BTCDashboard() {
           <p className="mt-1 text-xs">
             Trading involves risk. Always do your own research.
           </p>
-        </div>
         </div>
       </div>
     </div>

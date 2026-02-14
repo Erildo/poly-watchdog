@@ -46,14 +46,26 @@ export const useBTCStore = create<BTCDashboardStore>()(
         enableMidProb: false,
         enableLowProb: false,
         alertThreshold: 75,
+        timeframe: '1m',
       },
 
       // Actions
       setCurrentPrice: (price) => set({ currentPrice: price }),
       
-      addCandle: (candle) => set((state) => ({
-        candles: [...state.candles.slice(-2000), candle] // Keep last 2000 candles
-      })),
+      addCandle: (candle) => set((state) => {
+        // Check if candle with same timestamp already exists
+        const existingIndex = state.candles.findIndex(c => c.time === candle.time);
+        
+        if (existingIndex !== -1) {
+          // Update existing candle instead of adding duplicate
+          const updatedCandles = [...state.candles];
+          updatedCandles[existingIndex] = candle;
+          return { candles: updatedCandles.slice(-30240) }; // Keep last 3 weeks
+        }
+        
+        // Add new candle
+        return { candles: [...state.candles.slice(-30240), candle] }; // Keep last 3 weeks
+      }),
       
       setCandles: (candles) => set({ candles }),
       

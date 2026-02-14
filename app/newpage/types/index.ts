@@ -59,4 +59,5 @@ export interface DashboardConfig {
   enableMidProb: boolean;
   enableLowProb: boolean;
   alertThreshold: number;
+  timeframe: '1m' | '15m' | '45m';
 }
