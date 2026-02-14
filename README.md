@@ -4,12 +4,19 @@ A real-time dashboard for monitoring Polymarket traders with Discord notificatio
 
 ## Features
 
-- 🎯 Track multiple Polymarket traders by username or wallet address
-- 📊 View active positions with live P&L calculations
-- 📈 Browse complete trade history
-- 🔔 Discord notifications for every trade entry and exit
-- ⚡ Auto-refresh every 30 seconds
-- 💾 Persistent storage (tracked traders saved locally)
+Features
+✅ Real-time 1-minute BTC candlesticks via Binance WebSocket
+✅ 3 weeks of historical data stored for analysis (30,240 candles)
+✅ Configurable chart timeframe - Display last 3 weeks of price action
+✅ UCS Extreme Snap Back indicator - High/Mid/Low probability reversal signals
+✅ Camarilla Pivot Points - Daily, Weekly, and Monthly levels (H1-H5, L1-L5, Center)
+✅ Buy/Sell signal labels on chart for all historical signals
+✅ Discord webhook alerts for real-time notifications
+✅ Performance tracking with win rate metrics by probability level
+✅ Timeframe selector - Switch between 1m, 15m, 45m intervals
+✅ Beautiful dark theme UI with Lightweight Charts library
+✅ Optimized performance - Smart caching for fast signal calculation
+✅ UTC timezone for accurate daily pivot calculations
 
 ## Setup
 
