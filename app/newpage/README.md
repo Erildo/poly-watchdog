@@ -5,12 +5,17 @@ Real-time Bitcoin trend reversal prediction system using the UCS Extreme Snap Ba
 ## Features
 
 ✅ **Real-time 1-minute BTC candlesticks** via Binance WebSocket  
-✅ **UCS Extreme Snap Back indicator** converted from Pine Script  
-✅ **Camarilla Pivot Points** (R3, R4, S3, S4 levels)  
-✅ **High/Mid/Low probability signals** with confidence scores  
+✅ **3 weeks of historical data** stored for analysis (30,240 candles)  
+✅ **Configurable chart timeframe** - Display last 3 weeks of price action  
+✅ **UCS Extreme Snap Back indicator** - High/Mid/Low probability reversal signals  
+✅ **Camarilla Pivot Points** - Daily, Weekly, and Monthly levels (H1-H5, L1-L5, Center)  
+✅ **Buy/Sell signal labels** on chart for all historical signals  
 ✅ **Discord webhook alerts** for real-time notifications  
-✅ **Performance tracking** with win rate metrics  
-✅ **Beautiful dark theme** UI with Lightweight Charts  
+✅ **Performance tracking** with win rate metrics by probability level  
+✅ **Timeframe selector** - Switch between 1m, 15m, 45m intervals  
+✅ **Beautiful dark theme** UI with Lightweight Charts library  
+✅ **Optimized performance** - Smart caching for fast signal calculation  
+✅ **UTC timezone** for accurate daily pivot calculations  
 
 ## Installation
 
@@ -43,11 +48,156 @@ npm run build
 npm start
 ```
 
+## Dashboard Overview
+
+### Main Chart
+- **3 weeks of 1-minute candlestick data** (configurable display range)
+- **Buy/Sell signal labels** from UCS Extreme Snap Back indicator
+- **Camarilla pivot lines**:
+  - Daily levels: H1-H5 (orange), L1-L5 (teal), Center (white)
+  - Weekly levels: WH3, WL3, WCenter (cyan)
+  - Monthly levels: MH3, MH4, ML3, ML4, MCenter (light green)
+- **Real-time price overlay** with current BTC/USDT price
+
+### Right Panel Components
+
+**1. Current Signal + Recent Alerts**
+- Latest reversal signal with direction, confidence, and price movement
+- Last 5 alerts displayed with outcomes (win/loss/pending)
+- Color-coded by direction (green/red)
+
+**2. Performance Metrics**
+- Overall win rate percentage
+- Total signals, wins, losses
+- Breakdown by probability level (High/Mid/Low)
+- Win rate progress bar
+
+**3. Settings**
+- Discord webhook URL input
+- Enable/disable signal types (High/Mid/Low probability)
+- Alert confidence threshold slider (50-100%)
+- **Timeframe selector** - 1m, 15m, 45m buttons
+- Discord connection status indicator
+
 ## How It Works
 
 ### UCS Extreme Snap Back Indicator
 
 The indicator detects trend reversals by measuring price deviation from moving averages using ATR (Average True Range) bands:
+
+- **High Probability (95% confidence)**: Price exceeds all 3 deviation bands
+- **Mid Probability (75% confidence)**: Price exceeds 2 deviation bands
+- **Low Probability (55% confidence)**: Price exceeds 1 deviation band
+
+**Parameters:**
+- MA Periods: 7, 14, 21, 32
+- ATR Multipliers: 1.6x, 2.4x, 3.2x
+
+**Signal Detection:**
+- Scans all historical candles (last 3 weeks)
+- Uses smart caching to avoid recalculation
+- Only processes new candles in real-time
+- Prevents duplicate consecutive signals
+
+### Camarilla Pivot Points
+
+Calculated using **previous period's OHLC data** (UTC timezone):
+
+**Daily Pivots:**
+- Uses yesterday's High, Low, Close (00:00-23:59 UTC)
+- Formula: `Close ± Range × (1.1 / divisor)`
+- Levels: H1-H5, L1-L5, Center
+
+**Weekly Pivots:**
+- Uses last week's data (Monday-Sunday)
+- WH3, WL3, WCenter displayed
+
+**Monthly Pivots:**
+- Uses previous month's data (1st to last day)
+- MH3, MH4, ML3, ML4, MCenter displayed
+
+Pivots remain static throughout the day/week/month and update at period boundaries.
+
+### Data Flow
+
+1. **Initial Load**: Fetches 3 weeks (30,240 candles) from Binance API
+2. **Real-time Updates**: WebSocket streams new 1-minute candles
+3. **Signal Calculation**: Runs once on load, then only on new candles
+4. **Pivot Updates**: Recalculates daily at UTC midnight
+5. **Alert Dispatch**: Sends Discord webhook for high-confidence signals
+6. **Performance Tracking**: Stores last 100 alerts with outcomes
+
+## Configuration
+
+### Signal Types
+
+Toggle which probability levels trigger alerts:
+- ✅ High Probability (recommended) - 95% confidence
+- ⬜ Mid Probability - 75% confidence
+- ⬜ Low Probability - 55% confidence
+
+### Alert Threshold
+
+Minimum confidence (50-100%) required to send Discord alerts. Default: 75%
+
+### Timeframe Selector
+
+Choose chart resolution:
+- **1m** - 1-minute candles (default)
+- **15m** - 15-minute candles
+- **45m** - 45-minute candles
+
+### Chart Display Range
+
+To adjust visible timeframe, edit `components/TradingChart.tsx`:
+
+```typescript
+// Line ~84
+const timeAgo = now - (21 * 24 * 60 * 60 * 1000); // 3 weeks
+
+// Options:
+// 24 hours:  now - (24 * 60 * 60 * 1000)
+// 1 week:    now - (7 * 24 * 60 * 60 * 1000)
+// 3 weeks:   now - (21 * 24 * 60 * 60 * 1000)
+```
+
+### Discord Webhook Format
+
+Webhook URL should look like:
+```
+https://discord.com/api/webhooks/[ID]/[TOKEN]
+```
+
+Alert payload includes:
+- Signal direction (BUY/SELL)
+- Price at signal
+- Confidence percentage
+- Probability level (HIGH/MID/LOW)
+- Timestamp
+- Color-coded embeds (green for buy, red for sell)
+
+## Data Sources
+
+- **Price Feed**: Binance WebSocket (`wss://stream.binance.com:9443/ws/btcusdt@kline_1m`)
+- **Historical Data**: Binance REST API (`/api/v3/klines`)
+- **Backup**: CoinGecko API (if Binance unavailable)
+
+## Tech Stack
+
+- **Next.js 15** - React framework with App Router
+- **TypeScript** - Type safety
+- **Zustand** - State management with persistence
+- **Lightweight Charts** - TradingView's charting library
+- **Tailwind CSS** - Styling
+- **Binance WebSocket** - Real-time price feed
+
+## Performance Optimizations
+
+- **Smart Caching**: UCS indicator only processes new candles
+- **Deduplication**: Prevents duplicate candles in store and chart
+- **Lazy Calculation**: Signals calculated once on load, not every minute
+- **Efficient Windowing**: Uses 100-candle windows for calculations
+- **Memory Management**: Stores max 30,240 candles (3 weeks)
 
 - **High Probability (95% confidence)**: Price exceeds all 3 deviation bands
 - **Mid Probability (75% confidence)**: Price exceeds 2 deviation bands
@@ -112,42 +262,93 @@ https://discord.com/api/webhooks/[ID]/[TOKEN]
 ## File Structure
 
 ```
-btc-dashboard/
+app/newpage/
 ├── components/
-│   ├── TradingChart.tsx       # Main candlestick chart
-│   ├── SignalPanel.tsx        # Current signal display
-│   ├── AlertFeed.tsx          # Alert history
-│   ├── SettingsPanel.tsx      # Configuration
-│   └── PerformanceMetrics.tsx # Win rate stats
-├── lib/
-│   ├── ucs-indicator.ts       # UCS algorithm (Pine → TS)
-│   ├── camarilla.ts           # Pivot calculations
-│   ├── store.ts               # Zustand state
-│   └── discord.ts             # Webhook sender
+│   ├── TradingChart.tsx          # Main chart with 3-week display
+│   ├── CombinedSignalAlerts.tsx  # Current signal + recent alerts
+│   ├── PerformanceMetrics.tsx    # Win rate stats (compact)
+│   └── SettingsPanel.tsx         # Discord webhook + timeframe selector
 ├── hooks/
-│   └── useBTCPrice.ts         # WebSocket connection
+│   └── useBTCPrice.ts            # WebSocket + 3-week data fetching
+├── lib/
+│   ├── ucs-indicator.ts          # Signal calculation with caching
+│   ├── camarilla.ts              # Daily/weekly/monthly pivots (UTC)
+│   ├── store.ts                  # Zustand state (30,240 candles)
+│   └── discord.ts                # Webhook sender
 ├── types/
-│   └── index.ts               # TypeScript interfaces
-└── page.tsx                   # Main dashboard page
+│   └── index.ts                  # TypeScript interfaces
+└── page.tsx                      # Main dashboard (2-column layout)
 ```
 
-## Indicator Logic (Pine Script → TypeScript)
+## Troubleshooting
 
-### Original Pine Script
-```pine
-// Moving averages
-ma1 = sma(src, 7)
-ma2 = sma(src, 14)
+### WebSocket Not Connecting
+- Check browser console for errors
+- Verify internet connection
+- Binance may have rate limits - wait 60 seconds and refresh
 
-// ATR bands
-rng1 = sma(tr, 7)
-up1 = ma1 + rng1 * 1.6
-dn1 = ma1 - rng1 * 1.6
+### No Signals Appearing
+- Ensure at least one probability level is enabled in settings
+- Wait for indicator calculation to complete (2-3 seconds on load)
+- Signals require price deviation from ATR bands (volatility needed)
 
-// Signal detection
-ERhigh1 = high > up1 ? 1 : 0
-HiPERh = ERhigh3[1] != 1 and ERhigh3 ? 1 : 0
-```
+### Discord Alerts Not Sending
+- Verify webhook URL format is correct
+- Check webhook hasn't been deleted in Discord
+- Ensure confidence threshold isn't set too high (try 50%)
+- Alerts only sent for NEW signals, not historical ones
+
+### Chart Loading Slowly
+- 3 weeks of data = ~30,000 candles to fetch
+- Initial load takes 5-10 seconds (multiple API calls to Binance)
+- After first load, WebSocket provides instant updates
+
+### Pivots Seem Off
+- Pivots use UTC timezone (Binance standard)
+- Daily pivots based on yesterday's 00:00-23:59 UTC
+- Weekly pivots based on last Monday-Sunday
+- If still incorrect, check you have 3+ weeks of data loaded
+
+### Browser Freezing
+- Should be fixed with optimized indicator (uses caching)
+- If still occurs, refresh page - signal calculation runs only once on load
+- Check browser console for errors
+
+
+
+## Roadmap
+
+### Planned Features
+- [ ] Multi-timeframe analysis (5m, 15m, 1h aggregation)
+- [ ] Backtesting engine with historical data
+- [ ] Additional indicators (RSI divergence, MACD)
+- [ ] Trade execution integration
+- [ ] Email/SMS alerts
+- [ ] Mobile app version
+- [ ] Position sizing calculator
+- [ ] Risk/reward visualization
+
+### Known Limitations
+- Binance API rate limits (10 requests for 3 weeks of data)
+- No authentication (single-user deployment)
+- WebSocket reconnects on disconnect (auto-refresh may be needed)
+- Signals based on 1-minute data only (no aggregation yet)
+- Performance tracking manual (no auto win/loss detection)
+
+## License
+
+MIT
+
+## Disclaimer
+
+**This tool is for educational and informational purposes only. Trading cryptocurrencies involves substantial risk of loss. Past performance does not guarantee future results. Always do your own research and never invest more than you can afford to lose.**
+
+---
+
+
+
+
+
 
 ### TypeScript Implementation
 ```typescript
@@ -209,30 +410,6 @@ The dashboard tracks:
 - Check if Binance API is accessible
 - Verify no CORS issues in console
 
-## Customization
-
-### Adjust Indicator Parameters
-Edit `lib/ucs-indicator.ts`:
-```typescript
-private len1 = 7;   // Change MA periods
-private len2 = 14;
-private len3 = 21;
-private len4 = 32;
-```
-
-### Modify ATR Multipliers
-```typescript
-const up1 = ma1 + rng1 * 1.6;  // Increase for fewer signals
-const up2 = ma2 + rng2 * 2.4;
-const up3 = ma2 + rng3 * 3.2;
-```
-
-### Change Chart Colors
-Edit `components/TradingChart.tsx`:
-```typescript
-upColor: '#26a69a',     // Green candles
-downColor: '#ef5350',   // Red candles
-```
 
 ## Roadmap
 
@@ -253,5 +430,3 @@ MIT
 **This tool is for educational and informational purposes only. Trading cryptocurrencies involves substantial risk of loss. Always do your own research and never invest more than you can afford to lose.**
 
 ---
-
-Built with ❤️ using UCS Extreme Snap Back indicator
